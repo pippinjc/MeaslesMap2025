@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Measles Outbreak Map</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.0/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+    <style>
+    html, body { 
+        height: 100%; 
+        margin: 0; 
+        padding: 0; 
+        display: flex; 
+        flex-direction: column;
+        font-family: 'Titillium Web', sans-serif;
+    }
+
+    header {
+        background-color: #545454; 
+        color: white;
+        padding: 15px 25px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        z-index: 2000;
+        flex: 0 0 auto;
+    }
+    
+    header h1 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 1px;
+    }
+
+    header h3 {
+        margin: 5px 0 0 0;
+        font-size: 14px;
+        font-weight: 400;
+        opacity: 0.8;
+    }
+
+    #map { 
+        flex: 1;
+        width: 100%;
+        position: relative;
+    }
+
+    #sidebar {
+        position: absolute;
+        top: 100px;
+        left: 20px;
+        width: 300px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        z-index: 1000; 
+        max-height: calc(100% - 60px); 
+        overflow-y: auto; 
+    }
+
+    #sidebar h2 {
+        margin-top: 0;
+        color: #484545;
+        font-size: 20px;
+    }
+
+    #sidebar p {
+        color: #333;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    #sidebar a {
+        color: #341539;
+        font-weight: bold;
+        text-decoration: none;
+    }
+    
+    #sidebar a:hover {
+        text-decoration: underline;
+    }
+    .legend {              
+            z-index: 1000;              
+            position: absolute;              
+            right: 20px;              
+            bottom: 20px;              
+            padding: 10px;              
+            font: 14px Arial, Helvetica, sans-serif;              
+            background: white;              
+            background: rgba(255, 255, 255, 0.9);              
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);              
+            border-radius: 5px;          
+        }
+        .legend i {              
+            width:  18px;              
+            height: 16px;              
+            float: left;              
+            margin-right: 8px;              
+            opacity: 0.9; 
+        }
+        .biohazard-icon {
+            background: none;
+            border: none;
+        }.info {
+            padding: 12px 15px;
+            font: 14px/16px Arial, Helvetica, sans-serif;
+            background: white;
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            min-width: 200px;
+            z-index: 1000;
+        }
+        .info h4 {
+            margin: 0 0 5px;
+            color: #777;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 12px;
+        }
+        .info b {
+            font-size: 18px;
+            color: #333;
+        }
+
+    </style>
+
+    <script src="https://unpkg.com/leaflet@1.7.0/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-ajax/2.1.0/leaflet.ajax.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/1.3.4/chroma.min.js"></script>
+
+</head>
+<body>
+    <header>
+        <h1>Is the US at risk of losing its measles elimination status?</h1>
+        <h3>Mapping the 2025 U.S. Measles Outbreak</h3>
+    </header>
+
+
+<div id="map">
+
+    <div id="sidebar">
+            <h2>About this Map</h2>
+            <p>
+                This interactive web map tracks the spread of measles across the United States in 2025. 
+Clicking on data points will show the county in which the virus has been transmitted. Data points will show the difference between local transmission and imported transmission.
+            </p>
+            <p>
+ Measles is a highly contagious virus. Recent outbreaks have been linked to 
+                declining vaccination rates in specific communities. Over 1,800 cases have been confirmed From January 1st 2025 to December 5th 2025.
+            </p>
+            <hr>
+            <p>
+                <i class="fa-solid fa-newspaper"></i> 
+                <a href="https://abcnews.go.com/Health/us-risk-losing-measles-elimination-status/story?id=127763508" target="_blank">Read the full story on ABC.com</a>
+            </p>
+        </div>
+    <div class='legend'></div>
+</div>
+
+<script>
+    var map = L.map('map').setView([37.8, -96], 4);
+     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+	attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'}).addTo(map);
+
+    map.createPane('points');
+    map.getPane('points').style.zIndex = 650; 
+    L.control.scale({ position: 'bottomleft' }).addTo(map);
+
+ 
+    var grades = [0, 1, 10, 50, 200];
+    var colors = chroma.scale('YlOrRd').colors(grades.length);
+
+    function getColor(d) {
+        if (d === null || isNaN(d)) return '#d3d3d3'; 
+        for (var i = 0; i < grades.length - 1; i++) {
+            if (d >= grades[i] && d < grades[i+1]) return colors[i];
+        }
+        if (d >= grades[grades.length - 1]) return colors[grades.length - 1];
+        return '#d3d3d3';
+    }
+
+    function style(feature) {
+        var casesNumber = feature.properties.cases_num_sum; 
+        return {
+            weight: 2,
+            opacity: 1,
+            color: 'white',
+            dashArray: '3',
+            fillOpacity: 0.7,
+            fillColor: getColor(casesNumber)
+        };
+    }
+
+ 
+    var info = L.control();
+
+    info.onAdd = function (map) {
+        this._div = L.DomUtil.create('div', 'info'); 
+        this.update();
+        return this._div;
+    };
+
+
+info.update = function (props) {
+    this._div.innerHTML = 
+        '<h2 style="margin:0 0 10px; color:#545454; font-size:24px;">Amount of Cases in State</h2>' +
+        '<h4 style="margin:0; color:#555;">2025 U.S. Measles Cases</h4><hr>' + 
+        (props ?
+        '<b style="font-size:1.2em;">' + props.name + '</b><br />' + 
+        '<span class="info-cases">' + (props.cases_num_sum || '0') + ' Total Cases</span>'
+        : 'Hover over a state');
+};
+    info.addTo(map);
+
+    var geojson = null; 
+
+    function highlightFeature(e) {                
+        var layer = e.target;                
+        layer.setStyle({
+            weight: 5,
+            opacity: 0.8,
+            color: '#666',
+            dashArray: '',
+            fillOpacity: 0.7
+        });
+        
+        info.update(layer.feature.properties);
+    }
+
+    function zoomToFeature(e) {                
+        map.fitBounds(e.target.getBounds());            
+    }
+
+    function resetHighlight(e) {                
+        geojson.resetStyle(e.target);
+        info.update();
+    }
+
+    function onEachFeature(feature, layer) {  
+        layer.on({                    
+            mouseover: highlightFeature,                    
+            click: zoomToFeature,                    
+            mouseout: resetHighlight                
+        });            
+    }
+
+    geojson = L.geoJson.ajax("assets/measles_final_choropleth.geojson", { 
+        style: style,
+        onEachFeature: onEachFeature
+    }).addTo(map);
+
+    $.getJSON("assets/pointsmeasles.geojson", function(data) {
+
+        var mergedFeatures = {};
+
+        data.features.forEach(function(feature) {
+            var locationID = feature.properties.county + feature.properties.state;
+
+            if (!mergedFeatures[locationID]) {
+                mergedFeatures[locationID] = {
+                    type: "Feature",
+                    geometry: feature.geometry,
+                    properties: {
+                        county: feature.properties.county,
+                        state: feature.properties.state,
+                        total_cases: feature.properties.cases_total,
+                        imported_count: 0, 
+                        local_count: 0     
+                    }
+                };
+            }
+
+            var count = parseFloat(feature.properties.count);
+            if (feature.properties.type === "imported") {
+                mergedFeatures[locationID].properties.imported_count += count;
+            } else if (feature.properties.type === "local") {
+                mergedFeatures[locationID].properties.local_count += count;
+            }
+        });
+
+        var processedData = Object.values(mergedFeatures);
+
+        L.geoJson(processedData, {
+            
+            pointToLayer: function(feature, latlng) {
+                if (feature.properties.total_cases == 0) return null;
+
+                return L.marker(latlng, {
+                    pane: 'points', 
+                    icon: L.divIcon({
+                        className: 'biohazard-icon',
+                        html: '<i class="fa-solid fa-virus" style="color: #341539; font-size: 16px; text-shadow: 0 0 2px #fff;"></i>',
+                        iconSize: [20, 20],   
+                        iconAnchor: [10, 10]  
+                    })
+                });
+            },
+
+            onEachFeature: function(feature, layer) {
+                var popupContent = "<b>" + feature.properties.county + ", " + feature.properties.state + "</b><br>" +
+                                   "Total Cases: " + feature.properties.total_cases + "<br><hr>" +
+                                   "Local: " + feature.properties.local_count + "<br>" +
+                                   "Imported: " + feature.properties.imported_count;
+
+                layer.bindPopup(popupContent);
+            }
+
+        }).addTo(map);
+    });
+
+    var labels = [];            
+    labels.push('<i style="background:#d3d3d3"></i> 0');
+
+    for (var i = 1; i < grades.length - 1; i++) {                
+        labels.push(
+            '<i style="background:' + colors[i] + '"></i> ' + 
+            grades[i] + ' - ' + (grades[i + 1] - 1)
+        );            
+    }
+
+    labels.push(
+        '<i style="background:' + colors[grades.length - 1] + '"></i> ' + 
+        grades[grades.length - 1] + '+'
+    );            
+
+    $(".legend").html(labels.join('<br>'));
+
+    map.attributionControl.addAttribution('Measles Outbreak Data &copy; <a href="">Johns Hopkins University</a> | This map is made by Chandler Pippin');
+       
+</script>
+</body>
+</html>
